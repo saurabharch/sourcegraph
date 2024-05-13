@@ -44,6 +44,8 @@ export enum PageRoutes {
     CodyNewProSubscription = '/cody/manage/subscription/new',
     // The CodyManagement page is labeled as the "Dashboard" page.
     CodyManagement = '/cody/manage',
+    // The management page for an existing Cody Pro subscription.
+    CodyManageProSubscription = '/cody/manage/subscription',
     // The CodySubscriptions page is a comparison of different Cody product tiers.
     CodySubscription = '/cody/subscription',
 

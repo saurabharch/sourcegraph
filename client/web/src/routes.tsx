@@ -70,6 +70,10 @@ const CodySwitchAccountPage = lazyComponent(
     () => import('./cody/switch-account/CodySwitchAccountPage'),
     'CodySwitchAccountPage'
 )
+const ManageCodyProSubscriptionPage = lazyComponent(
+    () => import('./cody/management/subscription/edit/ManageCodyProSubscriptionPage'),
+    'ManageCodyProSubscriptionPage'
+)
 const NewCodyProSubscriptionPage = lazyComponent(
     () => import('./cody/management/subscription/new/NewCodyProSubscriptionPage'),
     'NewCodyProSubscriptionPage'
@@ -425,6 +429,20 @@ export const routes: RouteObject[] = [
                     <CodyManagementPage {...props} telemetryRecorder={props.platformContext.telemetryRecorder} />
                 )}
                 condition={({ licenseFeatures }) => licenseFeatures.isCodyEnabled}
+            />
+        ),
+    },
+    {
+        path: PageRoutes.CodyManageProSubscription,
+        element: (
+            <LegacyRoute
+                render={props => (
+                    <ManageCodyProSubscriptionPage
+                        authenticatedUser={props.authenticatedUser}
+                        telemetryRecorder={props.platformContext.telemetryRecorder}
+                    />
+                )}
+                condition={({ isSourcegraphDotCom }) => isSourcegraphDotCom && useEmbeddedCodyProUi()}
             />
         ),
     },
