@@ -284,7 +284,7 @@ require (
 	github.com/nxadm/tail v1.4.11
 	github.com/oschwald/maxminddb-golang v1.12.0
 	github.com/pkoukk/tiktoken-go v0.1.6
-	github.com/pkoukk/tiktoken-go-loader v0.0.1
+	github.com/pkoukk/tiktoken-go-loader v0.0.2-0.20240522064338-c17e8bc0f699
 	github.com/prometheus/statsd_exporter v0.22.7
 	github.com/robert-nix/ansihtml v1.0.1
 	github.com/sourcegraph/cloud-api v0.0.0-20240501113836-ecd1d4cba9dd

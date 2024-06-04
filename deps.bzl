@@ -4881,8 +4881,7 @@ def go_dependencies():
         name = "com_github_pkoukk_tiktoken_go_loader",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/pkoukk/tiktoken-go-loader",
-        sum = "h1:aOB2gRFzZTCCPi3YsOQXJO771P/5876JAsdebMyazig=",
-        version = "v0.0.1",
+        commit = "c17e8bc0f699ffab3de295efbd64d4b8ba6c4028",
     )
     go_repository(
         name = "com_github_playwright_community_playwright_go",

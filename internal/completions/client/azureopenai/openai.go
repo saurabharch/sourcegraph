@@ -14,6 +14,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/pkoukk/tiktoken-go"
+	tiktoken_loader "github.com/pkoukk/tiktoken-go-loader"
 	"golang.org/x/net/http2"
 
 	"github.com/sourcegraph/sourcegraph/internal/completions/tokenizer"
@@ -205,6 +207,54 @@ func (c *azureCompletionClient) Stream(
 	}
 }
 
+func NumTokensFromAzureOpenAiMessages(messages []types.Message, model string) (numTokens int, error error) {
+	tiktoken.SetBpeLoader(tiktoken_loader.NewOfflineLoader())
+	tkm, err := tiktoken.EncodingForModel(model)
+	if err != nil {
+		return 0, errors.Newf("tiktoken EncodingForModel error: %v", err)
+	}
+
+	var tokensPerMessage int
+	switch model {
+	case "gpt-3.5-turbo-0613",
+		"gpt-3.5-turbo-16k-0613",
+		"gpt-4-0314",
+		"gpt-4-32k-0314",
+		"gpt-4-0613",
+		"gpt-4-32k-0613",
+		"gpt-4o":
+		tokensPerMessage = 3
+	case "gpt-3.5-turbo-0301":
+		tokensPerMessage = 4 // every message follows <|im_start|>{role/name}\n{content}<|end|>\n
+	default:
+		if strings.Contains(model, "gpt-3.5-turbo") {
+			return NumTokensFromAzureOpenAiMessages(messages, "gpt-3.5-turbo-0613")
+		} else if strings.Contains(model, "gpt-4") {
+			return NumTokensFromAzureOpenAiMessages(messages, "gpt-4-0613")
+		} else {
+			err = errors.Newf("num_tokens_from_messages() is not implemented for model %s. See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens.", model)
+			return 0, err
+		}
+	}
+
+	for _, message := range messages {
+		numTokens += tokensPerMessage
+		numTokens += len(tkm.Encode(message.Text, nil, nil))
+		numTokens += len(tkm.Encode(message.Speaker, nil, nil))
+	}
+	numTokens += 3 // every reply is primed with <|im_start|>assistant<|im_sep|>
+	return numTokens, nil
+}
+
+func NumTokensFromAzureOpenAiResponseString(response string, model string) (numTokens int, error error) {
+	tiktoken.SetBpeLoader(tiktoken_loader.NewOfflineLoader())
+	tkm, err := tiktoken.EncodingForModel(model)
+	if err != nil {
+		return 0, errors.Newf("tiktoken EncodingForModel error: %v", err)
+	}
+	return len(tkm.Encode(response, nil, nil)), nil
+}
+
 func streamAutocomplete(
 	ctx context.Context,
 	client CompletionsClient,
@@ -230,7 +280,15 @@ func streamAutocomplete(
 		// stream is done
 		if errors.Is(err, io.EOF) {
 			tokenManager := tokenusage.NewManager()
-			err = tokenManager.TokenizeAndCalculateUsage(requestParams.Messages, content, tokenizer.AzureModel+"/"+requestParams.Model, "code_completions", tokenusage.AzureOpenAI)
+			inputTokens, err := NumTokensFromAzureOpenAiMessages(requestParams.Messages, requestParams.Model)
+			if err != nil {
+				logger.Warn("Failed to count input tokens with the token manager %w ", log.Error(err))
+			}
+			outputTokens, err := NumTokensFromAzureOpenAiResponseString(content, requestParams.Model)
+			if err != nil {
+				logger.Warn("Failed to count output tokens with the token manager %w ", log.Error(err))
+			}
+			err = tokenManager.UpdateTokenCountsFromModelUsage(inputTokens, outputTokens, tokenizer.AzureModel+"/"+requestParams.Model, "code_completions", tokenusage.AzureOpenAI)
 			if err != nil {
 				logger.Warn("Failed to count tokens with the token manager %w ", log.Error(err))
 			}
@@ -283,7 +341,15 @@ func streamChat(
 		// stream is done
 		if errors.Is(err, io.EOF) {
 			tokenManager := tokenusage.NewManager()
-			err = tokenManager.TokenizeAndCalculateUsage(requestParams.Messages, content, tokenizer.AzureModel+"/"+requestParams.Model, "chat_completions", tokenusage.AzureOpenAI)
+			inputTokens, err := NumTokensFromAzureOpenAiMessages(requestParams.Messages, requestParams.Model)
+			if err != nil {
+				logger.Warn("Failed to count input tokens with the token manager %w ", log.Error(err))
+			}
+			outputTokens, err := NumTokensFromAzureOpenAiResponseString(content, requestParams.Model)
+			if err != nil {
+				logger.Warn("Failed to count output tokens with the token manager %w ", log.Error(err))
+			}
+			err = tokenManager.UpdateTokenCountsFromModelUsage(inputTokens, outputTokens, tokenizer.AzureModel+"/"+requestParams.Model, "chat_completions", tokenusage.AzureOpenAI)
 			if err != nil {
 				logger.Warn("Failed to count tokens with the token manager %w ", log.Error(err))
 			}
