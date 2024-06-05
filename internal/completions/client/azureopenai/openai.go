@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -280,17 +281,19 @@ func streamAutocomplete(
 		// stream is done
 		if errors.Is(err, io.EOF) {
 			tokenManager := tokenusage.NewManager()
-			inputTokens, err := NumTokensFromAzureOpenAiMessages(requestParams.Messages, requestParams.Model)
+			inputTokens, err := NumTokensFromAzureOpenAiMessages(requestParams.Messages, requestParams.AzureCompletionModel)
 			if err != nil {
 				logger.Warn("Failed to count input tokens with the token manager %w ", log.Error(err))
 			}
-			outputTokens, err := NumTokensFromAzureOpenAiResponseString(content, requestParams.Model)
+			outputTokens, err := NumTokensFromAzureOpenAiResponseString(content, requestParams.AzureCompletionModel)
 			if err != nil {
 				logger.Warn("Failed to count output tokens with the token manager %w ", log.Error(err))
 			}
-			err = tokenManager.UpdateTokenCountsFromModelUsage(inputTokens, outputTokens, tokenizer.AzureModel+"/"+requestParams.Model, "code_completions", tokenusage.AzureOpenAI)
-			if err != nil {
-				logger.Warn("Failed to count tokens with the token manager %w ", log.Error(err))
+			if inputTokens != 0 && outputTokens != 0 {
+				err = tokenManager.UpdateTokenCountsFromModelUsage(inputTokens, outputTokens, tokenizer.AzureModel+"/"+requestParams.Model, "code_completions", tokenusage.AzureOpenAI)
+				if err != nil {
+					logger.Warn("Failed to count tokens with the token manager %w ", log.Error(err))
+				}
 			}
 			return nil
 		}
@@ -341,17 +344,19 @@ func streamChat(
 		// stream is done
 		if errors.Is(err, io.EOF) {
 			tokenManager := tokenusage.NewManager()
-			inputTokens, err := NumTokensFromAzureOpenAiMessages(requestParams.Messages, requestParams.Model)
+			inputTokens, err := NumTokensFromAzureOpenAiMessages(requestParams.Messages, requestParams.AzureChatModel)
 			if err != nil {
 				logger.Warn("Failed to count input tokens with the token manager %w ", log.Error(err))
 			}
-			outputTokens, err := NumTokensFromAzureOpenAiResponseString(content, requestParams.Model)
+			outputTokens, err := NumTokensFromAzureOpenAiResponseString(content, requestParams.AzureChatModel)
 			if err != nil {
 				logger.Warn("Failed to count output tokens with the token manager %w ", log.Error(err))
 			}
-			err = tokenManager.UpdateTokenCountsFromModelUsage(inputTokens, outputTokens, tokenizer.AzureModel+"/"+requestParams.Model, "chat_completions", tokenusage.AzureOpenAI)
-			if err != nil {
-				logger.Warn("Failed to count tokens with the token manager %w ", log.Error(err))
+			if inputTokens != 0 && outputTokens != 0 {
+				err = tokenManager.UpdateTokenCountsFromModelUsage(inputTokens, outputTokens, tokenizer.AzureModel+"/"+requestParams.Model, "code_completions", tokenusage.AzureOpenAI)
+				if err != nil {
+					logger.Warn("Failed to count tokens with the token manager %w ", log.Error(err))
+				}
 			}
 			return nil
 		}
