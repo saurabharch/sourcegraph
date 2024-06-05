@@ -4874,8 +4874,8 @@ def go_dependencies():
         name = "com_github_pkoukk_tiktoken_go",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/pkoukk/tiktoken-go",
-        sum = "h1:JF0TlJzhTbrI30wCvFuiw6FzP2+/bR+FIxUdgEAcUsw=",
-        version = "v0.1.6",
+        sum = "h1:qOBHXX4PHtvIvmOtyg1EeKlwFRiMKAcoMp4Q+bLQDmw=",
+        version = "v0.1.7",
     )
     go_repository(
         name = "com_github_pkoukk_tiktoken_go_loader",
