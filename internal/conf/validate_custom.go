@@ -54,6 +54,14 @@ func validateCustom(cfg Unified) (problems Problems) {
 		}
 	}
 
+	hasAzure := cfg.Completions != nil && cfg.Completions.Provider == "azure-openai"
+	hasAzureChatModel := cfg.Completions != nil && cfg.Completions.AzureChatModel != ""
+	hasAzureCompletionModel := cfg.Completions != nil && cfg.Completions.AzureCompletionModel != ""
+
+	if hasAzure && !(hasAzureChatModel && hasAzureCompletionModel) {
+		invalid(NewSiteProblem(`when using azure-openai provider its mandatory to set both completions.azureChatModel and completions.azureCompletionModel for proper LLM Token usage`))
+	}
+
 	// Prevent usage of non-root externalURLs until we add their support:
 	// https://github.com/sourcegraph/sourcegraph/issues/7884
 	if cfg.ExternalURL != "" {
