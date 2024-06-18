@@ -34,9 +34,8 @@ type RepoStore interface {
 // It caches multiple consecutive uses in order to ensure repository lists (which can be quite
 // large, e.g. 500,000+ repositories) are only fetched as frequently as needed.
 type AllReposIterator struct {
-	RepoStore             RepoStore
-	Clock                 func() time.Time
-	SourcegraphDotComMode bool // result of  dotcom.SourcegraphDotComMode()
+	RepoStore RepoStore
+	Clock     func() time.Time
 
 	// RepositoryListCacheTime describes how long to cache repository lists for. These API calls
 	// can result in hundreds of thousands of repositories, so choose wisely as it can be expensive
@@ -49,8 +48,8 @@ type AllReposIterator struct {
 	cachedPageRequests map[database.LimitOffset]cachedPageRequest
 }
 
-func NewAllReposIterator(repoStore RepoStore, clock func() time.Time, sourcegraphDotComMode bool, repositoryListCacheTime time.Duration, counterOpts *prometheus.CounterOpts) *AllReposIterator {
-	return &AllReposIterator{RepoStore: repoStore, Clock: clock, SourcegraphDotComMode: sourcegraphDotComMode, RepositoryListCacheTime: repositoryListCacheTime, counter: promauto.NewCounterVec(*counterOpts, []string{"result"})}
+func NewAllReposIterator(repoStore RepoStore, clock func() time.Time, repositoryListCacheTime time.Duration, counterOpts *prometheus.CounterOpts) *AllReposIterator {
+	return &AllReposIterator{RepoStore: repoStore, Clock: clock, RepositoryListCacheTime: repositoryListCacheTime, counter: promauto.NewCounterVec(*counterOpts, []string{"result"})}
 }
 
 func (a *AllReposIterator) timeSince(t time.Time) time.Duration {
