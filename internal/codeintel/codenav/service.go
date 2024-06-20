@@ -304,13 +304,13 @@ func (s *Service) getUploadLocation(ctx context.Context, args RequestArgs, reque
 // getSourceRange translates a range (relative to the indexed commit) into an equivalent range in the requested
 // commit. If the translation fails, then the original commit and range are returned along with a false-valued
 // flag.
-func (s *Service) getSourceRange(ctx context.Context, args RequestArgs, requestState RequestState, repositoryID int, commit, path string, rng shared.Range) (string, shared.Range, bool, error) {
+func (s *Service) getSourceRange(ctx context.Context, args RequestArgs, requestState RequestState, repositoryID int, commit string, path string, rng shared.Range) (string, shared.Range, bool, error) {
 	if repositoryID != args.RepositoryID {
 		// No diffs between distinct repositories
 		return commit, rng, true, nil
 	}
 
-	if _, sourceRange, ok, err := requestState.GitTreeTranslator.GetTargetCommitRangeFromSourceRange(ctx, commit, path, rng, true); err != nil {
+	if sourceRange, ok, err := requestState.GitTreeTranslator.GetTargetCommitRangeFromSourceRange(ctx, commit, path, rng, true); err != nil {
 		return "", shared.Range{}, false, errors.Wrap(err, "gitTreeTranslator.GetTargetCommitRangeFromSourceRange")
 	} else if ok {
 		return args.Commit, sourceRange, true, nil
@@ -379,9 +379,9 @@ func (s *Service) GetDiagnostics(ctx context.Context, args PositionalRequestArgs
 		observation.Args{Attrs: observation.MergeAttributes(args.Attrs(), requestState.Attrs()...)})
 	defer endObservation()
 
-	visibleUploads, err := s.getUploadPaths(ctx, args.Path, requestState)
-	if err != nil {
-		return nil, 0, err
+	visibleUploads := s.filterCachedUploadsContainingPath(ctx, requestState, args.Path)
+	if len(visibleUploads) == 0 {
+		return nil, 0, errors.New("No valid upload found for provided (repo, commit, path)")
 	}
 
 	totalCount := 0
@@ -484,11 +484,7 @@ func (s *Service) VisibleUploadsForPath(ctx context.Context, requestState Reques
 		}})
 	}()
 
-	visibleUploads, err := s.getUploadPaths(ctx, requestState.Path, requestState)
-	if err != nil {
-		return nil, err
-	}
-
+	visibleUploads := s.filterCachedUploadsContainingPath(ctx, requestState, requestState.Path)
 	for _, upload := range visibleUploads {
 		uploads = append(uploads, upload.Upload)
 	}
@@ -496,28 +492,49 @@ func (s *Service) VisibleUploadsForPath(ctx context.Context, requestState Reques
 	return
 }
 
-// getUploadPaths adjusts the current target path for each upload visible from the current target
+// filterCachedUploadsContainingPath adjusts the current target path for each upload visible from the current target
 // commit. If an upload cannot be adjusted, it will be omitted from the returned slice.
-func (s *Service) getUploadPaths(ctx context.Context, path string, requestState RequestState) ([]visibleUpload, error) {
-	cacheUploads := requestState.GetCacheUploads()
-	visibleUploads := make([]visibleUpload, 0, len(cacheUploads))
-	for _, cu := range cacheUploads {
-		targetPath, ok, err := requestState.GitTreeTranslator.GetTargetCommitPathFromSourcePath(ctx, cu.Commit, path, false)
-		if err != nil {
-			return nil, errors.Wrap(err, "r.GitTreeTranslator.GetTargetCommitPathFromSourcePath")
+func (s *Service) filterCachedUploadsContainingPath(ctx context.Context, requestState RequestState, path string) []visibleUpload {
+	// NOTE(id: path-based-upload-filtering):
+	//
+	// (70% confidence) There are a few cases here for the uploads cached earlier.
+	// 1. The upload was for an older commit.
+	//    1a r.requestState.path exists in upload -> This is OK, we can use the upload as-is.
+	//    1b r.requestState.path doesn't exist in upload, but there is a path P in upload
+	//       such that `git diff upload.Commit..r.requestState.commit` would say that P
+	//       was renamed to r.requestState.path.
+	//       -> This is not easy to do, see NOTE(id: codenav-file-rename-detection) for details.
+	//    1c r.requestState.path doesn't exist in upload, and there is no path in upload
+	//       that was detected to be renamed.
+	//       -> We should detect this case and skip the upload. However, similar to 1b above,
+	//          we can't detect this easily.
+	// 2. The upload is for the same commit. In this case, we can be confident that the
+	//    path exists in the upload (otherwise we wouldn't have cached it).
+	//
+	// For a simplistic implementation here, just loop over the upload IDs and check
+	// if the document exists.
+	cachedUploads := requestState.GetCacheUploads()
+	filteredUploads := make([]visibleUpload, 0, len(cachedUploads))
+	for _, upload := range cachedUploads {
+		visibleUpload := visibleUpload{
+			Upload:                upload,
+			TargetPath:            path,
+			TargetPathWithoutRoot: strings.TrimPrefix(path, upload.Root),
 		}
-		if !ok {
+		if upload.Commit == requestState.Commit && path == requestState.Path {
+			filteredUploads = append(filteredUploads, visibleUpload)
 			continue
 		}
-
-		visibleUploads = append(visibleUploads, visibleUpload{
-			Upload:                cu,
-			TargetPath:            targetPath,
-			TargetPathWithoutRoot: strings.TrimPrefix(targetPath, cu.Root),
-		})
+		// TODO(id: check-path-multiple-uploads-api): We could optimize this to a single DB query
+		// instead of a loop along with a bunch of deserialization.
+		if doc, err := s.SCIPDocument(ctx, upload.ID, path); err == nil && doc != nil {
+			// Be pessimistic, ignoring the upload for all errors, not just some
+			// DocumentNotFound or MalformedDocument cases.
+			filteredUploads = append(filteredUploads, visibleUpload)
+			continue
+		}
 	}
-
-	return visibleUploads, nil
+	return filteredUploads
 }
 
 func (s *Service) GetRanges(ctx context.Context, args PositionalRequestArgs, requestState RequestState, startLine, endLine int) (adjustedRanges []AdjustedCodeIntelligenceRange, err error) {
@@ -528,9 +545,9 @@ func (s *Service) GetRanges(ctx context.Context, args PositionalRequestArgs, req
 	)
 	defer endObservation()
 
-	uploadsWithPath, err := s.getUploadPaths(ctx, args.Path, requestState)
-	if err != nil {
-		return nil, err
+	uploadsWithPath := s.filterCachedUploadsContainingPath(ctx, requestState, args.Path)
+	if len(uploadsWithPath) == 0 {
+		return nil, errors.New("No valid upload found for provided (repo, commit, path)")
 	}
 
 	for i := range uploadsWithPath {
@@ -602,9 +619,9 @@ func (s *Service) GetStencil(ctx context.Context, args PositionalRequestArgs, re
 	ctx, trace, endObservation := observeResolver(ctx, &err, s.operations.getStencil, serviceObserverThreshold, observation.Args{Attrs: requestState.Attrs()})
 	defer endObservation()
 
-	adjustedUploads, err := s.getUploadPaths(ctx, args.Path, requestState)
-	if err != nil {
-		return nil, err
+	adjustedUploads := s.filterCachedUploadsContainingPath(ctx, requestState, args.Path)
+	if len(adjustedUploads) == 0 {
+		return nil, errors.New("No valid upload found for provided (repo, commit, path)")
 	}
 
 	for i := range adjustedUploads {
@@ -759,7 +776,8 @@ func (s *Service) getVisibleUpload(ctx context.Context, line, character int, upl
 		Character: character,
 	}
 
-	targetPath, targetPosition, ok, err := r.GitTreeTranslator.GetTargetCommitPositionFromSourcePosition(ctx, upload.Commit, position, false)
+	targetPath := r.Path
+	targetPosition, ok, err := r.GitTreeTranslator.GetTargetCommitPositionFromSourcePosition(ctx, upload.Commit, targetPath, position, false)
 	if err != nil || !ok {
 		return visibleUpload{}, false, errors.Wrap(err, "gitTreeTranslator.GetTargetCommitPositionFromSourcePosition")
 	}
@@ -824,10 +842,9 @@ func (s *Service) SnapshotForDocument(ctx context.Context, repositoryID int, com
 	if err != nil {
 		return nil, err
 	}
-	gittranslator := NewGitTreeTranslator(s.gitserver, &requestArgs{
+	gittranslator := NewGitTreeTranslator(s.gitserver, &translationBase{
 		repo:   repo,
 		commit: commit,
-		path:   path,
 	}, hunkcache)
 
 	linemap := newLinemap(string(file))
@@ -906,7 +923,7 @@ func (s *Service) SnapshotForDocument(ctx context.Context, repositoryID int, com
 			}
 		}
 
-		_, newRange, ok, err := gittranslator.GetTargetCommitPositionFromSourcePosition(ctx, upload.Commit, shared.Position{
+		newRange, ok, err := gittranslator.GetTargetCommitPositionFromSourcePosition(ctx, upload.Commit, path, shared.Position{
 			Line:      int(originalRange.Start.Line),
 			Character: int(originalRange.Start.Character),
 		}, false)

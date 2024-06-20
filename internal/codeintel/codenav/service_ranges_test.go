@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sourcegraph/log"
+	"github.com/sourcegraph/scip/bindings/go/scip"
 
 	"github.com/sourcegraph/sourcegraph/internal/api"
 	"github.com/sourcegraph/sourcegraph/internal/codeintel/codenav/shared"
@@ -49,6 +50,9 @@ func TestRanges(t *testing.T) {
 	})
 	mockSearchClient := client.NewMockSearchClient()
 	hunkCache, _ := NewHunkCache(50)
+
+	// Update this when TODO(id: check-path-multiple-uploads-api) is addressed.
+	mockLsifStore.SCIPDocumentFunc.SetDefaultReturn(&scip.Document{}, nil)
 
 	// Init service
 	svc := newService(observation.TestContextTB(t), mockRepoStore, mockLsifStore, mockUploadSvc, mockGitserverClient, mockSearchClient, log.NoOp())
