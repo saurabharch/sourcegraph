@@ -6,7 +6,7 @@ import { lazyComponent } from '@sourcegraph/shared/src/util/lazyComponent'
 
 import { codyProRoutes } from './cody/codyProRoutes'
 import { communitySearchContextsRoutes } from './communitySearchContexts/routes'
-import { type LegacyLayoutRouteContext, LegacyRoute } from './LegacyRouteContext'
+import { LegacyRoute, type LegacyLayoutRouteContext } from './LegacyRouteContext'
 import { PageRoutes } from './routes.constants'
 import { isSearchJobsEnabled } from './search-jobs/utility'
 
@@ -67,7 +67,6 @@ const CodySwitchAccountPage = lazyComponent(
     () => import('./cody/switch-account/CodySwitchAccountPage'),
     'CodySwitchAccountPage'
 )
-const CodyUpsellPage = lazyComponent(() => import('./cody/upsell/CodyUpsellPage'), 'CodyUpsellPage')
 const CodyDashboardPage = lazyComponent(() => import('./cody/dashboard/CodyDashboardPage'), 'CodyDashboardPage')
 const SearchJob = lazyComponent(() => import('./enterprise/search-jobs/SearchJobsPage'), 'SearchJobsPage')
 
@@ -396,7 +395,12 @@ export const routes: RouteObject[] = [
     ...communitySearchContextsRoutes,
     {
         path: PageRoutes.Cody,
-        element: <LegacyRoute render={props => <CodyDashboardOrUpsellPage {...props} />} />,
+        element: (
+            <LegacyRoute
+                render={props => <CodyDashboardPage {...props} />}
+                condition={({ licenseFeatures }) => licenseFeatures.isCodyEnabled}
+            />
+        ),
     },
     // this should be the last route to be regustered because it's a catch all route
     // when the instance has the code search feature.
@@ -431,12 +435,4 @@ function SearchPageOrUpsellPage(props: LegacyLayoutRouteContext): JSX.Element {
         return <SearchUpsellPage telemetryRecorder={props.platformContext.telemetryRecorder} />
     }
     return <SearchPageWrapper {...props} />
-}
-
-function CodyDashboardOrUpsellPage(props: LegacyLayoutRouteContext): JSX.Element {
-    const { isCodyEnabled } = props.licenseFeatures
-    if (!isCodyEnabled) {
-        return <CodyUpsellPage />
-    }
-    return <CodyDashboardPage {...props} telemetryRecorder={props.platformContext.telemetryRecorder} />
 }

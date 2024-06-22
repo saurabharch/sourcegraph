@@ -1,29 +1,26 @@
-import { type FC, useState, useEffect } from 'react'
+import { useEffect, useState, type FC } from 'react'
 
 import { mdiChevronDown } from '@mdi/js'
 
 import type { TelemetryV2Props } from '@sourcegraph/shared/src/telemetry'
-import { useIsLightTheme } from '@sourcegraph/shared/src/theme'
 import {
-    Text,
-    H1,
     ButtonLink,
+    H1,
+    Icon,
     Link,
     Menu,
     MenuButton,
-    MenuList,
     MenuItem,
-    Icon,
-    Position,
     MenuLink,
+    MenuList,
+    Position,
+    Text,
 } from '@sourcegraph/wildcard'
 
 import { getLicenseFeatures } from '../../util/license'
 import { CodyColorIcon } from '../chat/CodyPageIcon'
 import { IntelliJIcon } from '../upsell/IntelliJ'
 import { VSCodeIcon } from '../upsell/vs-code'
-
-import { UpsellImage } from './UpsellImage'
 
 import styles from './CodyDashboardPage.module.scss'
 
@@ -43,7 +40,7 @@ const setupOptions: SetupOption[] = [
     },
     {
         icon: <IntelliJIcon className={styles.linkSelectorIcon} />,
-        maker: 'Jetbrains',
+        maker: 'JetBrains',
         name: 'IntelliJ',
         setupLink: 'https://sourcegraph.com/docs/cody/clients/install-jetbrains',
     },
@@ -56,7 +53,6 @@ export const CodyDashboardPage: FC<CodyDashboardPageProps> = ({ telemetryRecorde
         telemetryRecorder.recordEvent('cody.dashboard', 'view')
     }, [telemetryRecorder])
 
-    const isLightTheme = useIsLightTheme()
     const codySetupLink = 'https://sourcegraph.com/docs/cody'
     const features = getLicenseFeatures()
     return (
@@ -67,20 +63,18 @@ export const CodyDashboardPage: FC<CodyDashboardPageProps> = ({ telemetryRecorde
                     Get started with <span className={styles.codyGradient}>Cody</span>
                 </H1>
                 <Text className={styles.dashboardHeroTagline}>
-                    Hey! 👋 Let’s get started with Cody — your new AI coding assistant.
+                    Hey! 👋 Let’s get started with Cody, your AI coding assistant.
                 </Text>
             </section>
 
             <section className={styles.dashboardOnboarding}>
                 <section className={styles.dashboardOnboardingIde}>
-                    <Text className={styles.dashboardText}>Download Cody for your favorite IDE</Text>
+                    <Text className={styles.dashboardText}>Get Cody in your editor</Text>
                     <LinkSelector options={setupOptions} />
                     <Text className="text-muted">
-                        Struggling with setup?{' '}
                         <Link to={codySetupLink} className={styles.dashboardOnboardingIdeInstallationLink}>
                             Explore installation docs
                         </Link>
-                        .
                     </Text>
                 </section>
                 <section className={styles.dashboardOnboardingWeb}>
@@ -105,7 +99,6 @@ export const CodyDashboardPage: FC<CodyDashboardPageProps> = ({ telemetryRecorde
                         </Text>
                         <Link to="/search">Explore Code Search</Link>
                     </section>
-                    <UpsellImage isLightTheme={isLightTheme} className="w-100" />
                 </section>
             )}
         </section>
